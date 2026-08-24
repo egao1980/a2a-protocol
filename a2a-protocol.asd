@@ -1,5 +1,5 @@
 (defsystem "a2a-protocol"
-  :version "0.1.0"
+  :version "0.2.0"
   :description "CLOS Agent2Agent protocol for cl-stack (A2A 1.0)"
   :author "egao1980"
   :license "MIT"

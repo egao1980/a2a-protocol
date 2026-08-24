@@ -96,6 +96,9 @@
    (provider :initarg :provider :accessor agent-card-provider :initform nil)
    (url :initarg :url :accessor agent-card-url :initform nil)))
 
+(defun %default-interfaces (url)
+  (list (make-agent-interface (or url "http://127.0.0.1/"))))
+
 (defun make-agent-card (&key name description version supported-interfaces
                           capabilities default-input-modes default-output-modes
                           skills documentation-url icon-url provider url)
@@ -103,7 +106,8 @@
                  :name (or name "cl-stack-a2a")
                  :description (or description "A2A agent")
                  :version (or version "0.1.0")
-                 :supported-interfaces supported-interfaces
+                 :supported-interfaces (or supported-interfaces
+                                           (%default-interfaces url))
                  :capabilities (or capabilities '(:streaming t :push-notifications nil))
                  :default-input-modes (or default-input-modes '("text/plain"))
                  :default-output-modes (or default-output-modes '("text/plain"))
@@ -185,8 +189,16 @@
    (message :initarg :message :accessor task-status-message :initform nil)
    (timestamp :initarg :timestamp :accessor task-status-timestamp :initform nil)))
 
+(defun iso8601-now ()
+  (multiple-value-bind (sec min hour day month year)
+      (decode-universal-time (get-universal-time) 0)
+    (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ"
+            year month day hour min sec)))
+
 (defun make-task-status (state &key message timestamp)
-  (make-instance 'task-status :state state :message message :timestamp timestamp))
+  (make-instance 'task-status
+                 :state state :message message
+                 :timestamp (or timestamp (iso8601-now))))
 
 (defclass a2a-task ()
   ((id :initarg :id :accessor a2a-task-id)
@@ -210,7 +222,10 @@
   (task-status-state (a2a-task-status task)))
 
 (defun (setf a2a-task-state) (state task)
-  (setf (task-status-state (a2a-task-status task)) state))
+  (let ((st (a2a-task-status task)))
+    (setf (task-status-state st) state
+          (task-status-timestamp st) (iso8601-now))
+    state))
 
 (defun terminal-state-p (state)
   (member state '(:completed :failed :canceled :rejected)))
@@ -234,6 +249,11 @@
    (streaming-p :initarg :streaming-p :accessor a2a-agent-streaming-p
                 :initform t)))
 
+(defun %plist-put (plist key value)
+  (let ((copy (copy-list plist)))
+    (setf (getf copy key) value)
+    copy))
+
 (defun make-a2a-agent (&key name card extended-card handler (streaming-p t) url)
   (let* ((name (or name "cl-stack-a2a"))
          (card (or card
@@ -241,12 +261,14 @@
                     :name name
                     :description "Echo A2A agent"
                     :url url
-                    :supported-interfaces
-                    (when url (list (make-agent-interface url)))
                     :skills (list (make-agent-skill "echo"
                                                     :name "Echo"
                                                     :description "Echoes the first text part"
-                                                    :tags '("echo")))))))
+                                                    :tags '("echo"))))))
+         (caps (agent-card-capabilities card)))
+    (when (and extended-card (listp caps) (not (getf caps :extended-agent-card)))
+      (setf (agent-card-capabilities card)
+            (%plist-put caps :extended-agent-card t)))
     (make-instance 'a2a-agent
                    :name name
                    :card card

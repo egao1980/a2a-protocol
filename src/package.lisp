@@ -120,7 +120,8 @@
    #:role-to-wire
    #:role-from-wire
    #:terminal-state-p
-   #:make-id)
+   #:make-id
+   #:iso8601-now)
   (:documentation
    "A2A 1.0 CLOS protocol. JSON-RPC methods are PascalCase (SendMessage, …);
     slash aliases (message/send, …) are accepted on dispatch."))
