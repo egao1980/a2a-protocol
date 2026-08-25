@@ -16,7 +16,7 @@ Card well-known path is `/.well-known/agent-card.json` (alias `agent.json`). Bin
 
 Part of [cl-stack](https://github.com/egao1980/cl-stack) agent-wire ([brief](https://github.com/egao1980/cl-stack/blob/main/docs/capabilities/a2a.md)). Tracks [#186](https://github.com/egao1980/cl-stack/issues/186).
 
-CI: `setup-client` + `setup-roswell` + `scripts/ci-install.lisp` / `ci-test.lisp` (OCI only).
+CI: canned [`cl-repository`](https://github.com/egao1980/cl-repository) (`test-system.yml` / `setup-client` + `ci`). Deps from `ghcr.io/egao1980/cl-systems`.
 
 ## License
 
