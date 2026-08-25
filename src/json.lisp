@@ -297,14 +297,20 @@
    :input-modes (%as-list (param obj "inputModes"))
    :output-modes (%as-list (param obj "outputModes"))))
 
+(defun %card-interfaces (card)
+  (or (agent-card-supported-interfaces card)
+      (when (agent-card-url card)
+        (list (make-agent-interface (agent-card-url card))))
+      (%default-interfaces nil)))
+
 (defun encode-agent-card (card)
+  "A2A 1.0: protocolVersion and url live on supportedInterfaces[], not the card root."
   (json-object
    "name" (agent-card-name card)
    "description" (agent-card-description card)
    "version" (agent-card-version card)
    "supportedInterfaces"
-   (map 'vector #'encode-agent-interface
-        (or (agent-card-supported-interfaces card) #()))
+   (map 'vector #'encode-agent-interface (%card-interfaces card))
    "capabilities" (%encode-capabilities (agent-card-capabilities card))
    "defaultInputModes" (map 'vector #'identity
                             (or (agent-card-default-input-modes card) '("text/plain")))
@@ -312,21 +318,22 @@
                              (or (agent-card-default-output-modes card) '("text/plain")))
    "skills" (map 'vector #'encode-agent-skill (or (agent-card-skills card) #()))
    "documentationUrl" (or (agent-card-documentation-url card) :omit)
-   "iconUrl" (or (agent-card-icon-url card) :omit)
-   "url" (or (agent-card-url card) :omit)
-   "protocolVersion" +a2a-protocol-version+))
+   "iconUrl" (or (agent-card-icon-url card) :omit)))
 
 (defun decode-agent-card (obj)
-  (make-agent-card
-   :name (param obj "name")
-   :description (param obj "description")
-   :version (param obj "version")
-   :supported-interfaces (mapcar #'decode-agent-interface
-                                 (%as-list (param obj "supportedInterfaces")))
-   :capabilities (%decode-capabilities (param obj "capabilities"))
-   :default-input-modes (%as-list (param obj "defaultInputModes"))
-   :default-output-modes (%as-list (param obj "defaultOutputModes"))
-   :skills (mapcar #'decode-agent-skill (%as-list (param obj "skills")))
-   :documentation-url (param obj "documentationUrl")
-   :icon-url (param obj "iconUrl")
-   :url (param obj "url")))
+  (let ((ifaces (mapcar #'decode-agent-interface
+                        (%as-list (param obj "supportedInterfaces")))))
+    (make-agent-card
+     :name (param obj "name")
+     :description (param obj "description")
+     :version (param obj "version")
+     :supported-interfaces (or ifaces
+                               (when (param obj "url")
+                                 (list (make-agent-interface (param obj "url")))))
+     :capabilities (%decode-capabilities (param obj "capabilities"))
+     :default-input-modes (%as-list (param obj "defaultInputModes"))
+     :default-output-modes (%as-list (param obj "defaultOutputModes"))
+     :skills (mapcar #'decode-agent-skill (%as-list (param obj "skills")))
+     :documentation-url (param obj "documentationUrl")
+     :icon-url (param obj "iconUrl")
+     :url (param obj "url"))))

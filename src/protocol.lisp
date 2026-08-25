@@ -9,7 +9,8 @@
 (defgeneric stream-message (backend message &key on-event))
 (defgeneric get-task (backend task-id &key history-length))
 (defgeneric list-tasks (backend &key context-id status page-size page-token
-                                  history-length include-artifacts))
+                                  history-length include-artifacts
+                                  status-timestamp-after))
 (defgeneric cancel-task (backend task-id &key))
 (defgeneric resubscribe-task (backend task-id &key on-event))
 
@@ -37,13 +38,30 @@
     ((member method '("GetExtendedAgentCard" "agent/getAuthenticatedExtendedCard")
              :test #'string=)
      :extended-card)
+    ((member method '("CreateTaskPushNotificationConfig"
+                      "GetTaskPushNotificationConfig"
+                      "ListTaskPushNotificationConfig"
+                      "DeleteTaskPushNotificationConfig"
+                      "tasks/pushNotificationConfig/set"
+                      "tasks/pushNotificationConfig/get"
+                      "tasks/pushNotificationConfig/list"
+                      "tasks/pushNotificationConfig/delete")
+             :test #'string=)
+     :push)
     (t nil)))
 
+(defun %normalize-a2a-version (ver)
+  "Empty / absent A2A-Version MUST be treated as 0.3."
+  (if (or (null ver) (and (stringp ver) (zerop (length (string-trim '(#\Space) ver)))))
+      "0.3"
+      ver))
+
 (defun %check-version (params &optional header-version)
-  (let ((ver (or header-version
-                 (param params "A2A-Version")
-                 (param params "protocolVersion"))))
-    (when (and ver (not (member ver *supported-protocol-versions* :test #'string=)))
+  (let ((ver (%normalize-a2a-version
+              (or header-version
+                  (param params "A2A-Version")
+                  (param params "protocolVersion")))))
+    (unless (member ver *supported-protocol-versions* :test #'string=)
       (error 'a2a-error
              :message "Version not supported"
              :code +a2a-error-version-not-supported+
@@ -99,6 +117,12 @@
                        (error 'a2a-error
                               :message "task is in a terminal state"
                               :code +a2a-error-unsupported-operation+))
+                     (let ((msg-ctx (a2a-message-context-id message))
+                           (task-ctx (a2a-task-context-id found)))
+                       (when (and msg-ctx task-ctx (not (equal msg-ctx task-ctx)))
+                         (error 'a2a-error
+                                :message "contextId does not match task"
+                                :code rpc-protocol:+invalid-params+)))
                      found)
                    (make-a2a-task
                     :context-id (or (a2a-message-context-id message)
@@ -183,18 +207,32 @@
                     :metadata (a2a-task-metadata task)))
    history-length))
 
+(defun %task-timestamp (task)
+  (or (task-status-timestamp (a2a-task-status task)) ""))
+
 (defmethod list-tasks ((agent a2a-agent) &key context-id status page-size page-token
-                                           history-length include-artifacts)
-  (declare (ignore page-token include-artifacts))
+                                           history-length include-artifacts
+                                           status-timestamp-after)
+  (declare (ignore include-artifacts))
   (let* ((all (loop for task being the hash-values of (a2a-agent-tasks agent)
                     when (and (or (null context-id)
                                   (equal context-id (a2a-task-context-id task)))
                               (or (null status)
-                                  (eq status (a2a-task-state task))))
+                                  (eq status (a2a-task-state task)))
+                              (or (null status-timestamp-after)
+                                  (string> (%task-timestamp task) status-timestamp-after)))
                       collect task))
+         (all (sort all #'string> :key #'%task-timestamp))
          (size (or page-size 50))
          (size (min 100 (max 1 size)))
-         (page (subseq all 0 (min size (length all)))))
+         (start (if (and page-token (stringp page-token) (plusp (length page-token)))
+                    (or (parse-integer page-token :junk-allowed t) 0)
+                    0))
+         (start (min (max 0 start) (length all)))
+         (rest (nthcdr start all))
+         (page (subseq rest 0 (min size (length rest))))
+         (next (when (> (length rest) size)
+                 (princ-to-string (+ start size)))))
     (list :tasks (mapcar (lambda (task)
                            (%apply-history-length
                             (make-a2a-task :id (a2a-task-id task)
@@ -207,7 +245,7 @@
                          page)
           :page-size size
           :total-size (length all)
-          :next-page-token "")))
+          :next-page-token (or next ""))))
 
 (defmethod cancel-task ((agent a2a-agent) task-id &key)
   (let ((task (%find-task agent task-id)))
@@ -233,6 +271,18 @@
       (make-a2a-stream-result events))))
 
 ;;; --- dispatch -------------------------------------------------------------
+
+(defun %capability-p (card key)
+  (let ((caps (and card (agent-card-capabilities card))))
+    (cond
+      ((hash-table-p caps)
+       (and (param caps (ecase key
+                          (:extended-agent-card "extendedAgentCard")
+                          (:push-notifications "pushNotifications")
+                          (:streaming "streaming")))
+            t))
+      ((listp caps) (and (getf caps key) t))
+      (t nil))))
 
 (defun %encode-list-result (plist include-artifacts history-length)
   (json-object
@@ -287,14 +337,23 @@
                       :page-size (param params "pageSize")
                       :page-token (param params "pageToken")
                       :history-length (%history-length params)
-                      :include-artifacts (param params "includeArtifacts"))
+                      :include-artifacts (param params "includeArtifacts")
+                      :status-timestamp-after (param params "statusTimestampAfter"))
           (and (param params "includeArtifacts") t)
           (%history-length params))))
       (:cancel-task
        (encode-task (cancel-task agent (%require-task-id params))))
       (:subscribe
        (resubscribe-task agent (%require-task-id params)))
+      (:push
+       (error 'a2a-error
+              :message "push notifications are not supported"
+              :code +a2a-error-push-not-supported+))
       (:extended-card
+       (unless (%capability-p (a2a-agent-card agent) :extended-agent-card)
+         (error 'a2a-error
+                :message "extended agent card is not supported"
+                :code +a2a-error-unsupported-operation+))
        (let ((card (a2a-agent-extended-card agent)))
          (unless card
            (error 'a2a-error
@@ -336,9 +395,10 @@
 
 (defmethod list-tasks ((backend a2a-backend) &key context-id status page-size
                                                page-token history-length
-                                               include-artifacts)
+                                               include-artifacts
+                                               status-timestamp-after)
   (declare (ignore context-id status page-size page-token history-length
-                   include-artifacts))
+                   include-artifacts status-timestamp-after))
   (error 'a2a-error :message "list-tasks not implemented"))
 
 (defmethod cancel-task ((backend a2a-backend) task-id &key)
