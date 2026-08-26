@@ -18,6 +18,7 @@
    #:a2a-error-code
    #:a2a-error-data
    #:a2a-error-reason
+   #:a2a-error-cause
    #:a2a-code-reason
    #:a2a-reason-code
    #:signal-a2a-error

@@ -24,7 +24,8 @@
   ((message :initarg :message :reader a2a-error-message :initform "A2A error")
    (code :initarg :code :reader a2a-error-code :initform -32603)
    (data :initarg :data :reader a2a-error-data :initform nil)
-   (reason :initarg :reason :reader a2a-error-reason :initform nil))
+   (reason :initarg :reason :reader a2a-error-reason :initform nil)
+   (cause :initarg :cause :reader a2a-error-cause :initform nil))
   (:report (lambda (c s)
              (format s "~A~@[ [~A]~]" (a2a-error-message c) (a2a-error-code c)))))
 
@@ -72,12 +73,12 @@
     (:version-not-supported 'a2a-version-not-supported)
     (t 'a2a-error)))
 
-(defun signal-a2a-error (&key message code data reason)
+(defun signal-a2a-error (&key message code data reason cause)
   (let* ((reason (or reason (and code (a2a-code-reason code)) :unknown))
          (code (or code (a2a-reason-code reason))))
     (error (a2a-reason-class reason)
            :message (or message "A2A error")
-           :code code :data data :reason reason)))
+           :code code :data data :reason reason :cause cause)))
 
 ;;; --- restart helpers -------------------------------------------------------
 

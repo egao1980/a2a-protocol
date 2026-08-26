@@ -288,7 +288,7 @@
                     (ok (eq :task-not-found (a2a-protocol:a2a-error-reason c)))
                     (ok (eql a2a-protocol:+a2a-error-task-not-found+
                              (a2a-protocol:a2a-error-code c)))
-                    (a2a-protocol:invoke-use-value
+                    (use-value
                      (a2a-protocol:make-a2a-task :id "supplied")
                      c))))
     (let ((task (a2a-protocol:get-task (%echo-agent) "missing")))
