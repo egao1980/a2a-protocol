@@ -110,9 +110,8 @@
     (when r (invoke-restart r value))))
 
 (defun auto-retry (condition)
-  (if (find-restart 'retry condition)
-      (invoke-retry condition)
-      (error condition)))
+  (when (find-restart 'retry condition)
+    (invoke-retry condition)))
 
 (defmacro with-auto-retry (&body body)
   `(handler-bind ((a2a-error #'auto-retry))
