@@ -17,6 +17,26 @@
    #:a2a-error-message
    #:a2a-error-code
    #:a2a-error-data
+   #:a2a-error-reason
+   #:a2a-error-cause
+   #:a2a-code-reason
+   #:a2a-reason-code
+   #:signal-a2a-error
+   #:a2a-task-not-found
+   #:a2a-task-not-cancelable
+   #:a2a-push-not-supported
+   #:a2a-unsupported
+   #:a2a-content-type-not-supported
+   #:a2a-invalid-response
+   #:a2a-extended-card-not-configured
+   #:a2a-extension-support-required
+   #:a2a-version-not-supported
+   #:call-with-a2a-restarts
+   #:with-a2a-restarts
+   #:invoke-retry
+   #:invoke-use-value
+   #:auto-retry
+   #:with-auto-retry
    #:a2a-backend
    #:a2a-agent
    #:a2a-agent-name

@@ -281,3 +281,22 @@
     (a2a-protocol:a2a-error (c)
       (ok (eql a2a-protocol:+a2a-error-push-not-supported+
                (a2a-protocol:a2a-error-code c))))))
+
+(deftest task-not-found-is-typed
+  (handler-bind ((a2a-protocol:a2a-task-not-found
+                  (lambda (c)
+                    (ok (eq :task-not-found (a2a-protocol:a2a-error-reason c)))
+                    (ok (eql a2a-protocol:+a2a-error-task-not-found+
+                             (a2a-protocol:a2a-error-code c)))
+                    (use-value
+                     (a2a-protocol:make-a2a-task :id "supplied")
+                     c))))
+    (let ((task (a2a-protocol:get-task (%echo-agent) "missing")))
+      (ok (equal "supplied" (a2a-protocol:a2a-task-id task))))))
+
+(deftest missing-task-reason-without-restart
+  (handler-case
+      (a2a-protocol:get-task (%echo-agent) "gone")
+    (a2a-protocol:a2a-error (c)
+      (ok (typep c 'a2a-protocol:a2a-task-not-found))
+      (ok (eq :task-not-found (a2a-protocol:a2a-error-reason c))))))

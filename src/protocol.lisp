@@ -14,9 +14,41 @@
 (defgeneric cancel-task (backend task-id &key))
 (defgeneric resubscribe-task (backend task-id &key on-event))
 
+(defmethod fetch-agent-card :around (backend url &rest args)
+  (declare (ignore backend url args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod serve-agent-card :around (backend card &rest args)
+  (declare (ignore backend card args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod send-message :around (backend message &rest args)
+  (declare (ignore backend message args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod stream-message :around (backend message &rest args)
+  (declare (ignore backend message args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod get-task :around (backend task-id &rest args)
+  (declare (ignore backend task-id args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod list-tasks :around (backend &rest args)
+  (declare (ignore backend args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod cancel-task :around (backend task-id &rest args)
+  (declare (ignore backend task-id args))
+  (with-a2a-restarts (call-next-method)))
+
+(defmethod resubscribe-task :around (backend task-id &rest args)
+  (declare (ignore backend task-id args))
+  (with-a2a-restarts (call-next-method)))
+
 (defun %ensure-backend (&optional (backend *a2a-backend*))
   (or backend
-      (error 'a2a-error :message "*a2a-backend* is nil — load an a2a-backend-*")))
+      (signal-a2a-error :message "*a2a-backend* is nil — load an a2a-backend-*")))
 
 (defun %ensure-params (params)
   (cond
@@ -62,7 +94,7 @@
                   (param params "A2A-Version")
                   (param params "protocolVersion")))))
     (unless (member ver *supported-protocol-versions* :test #'string=)
-      (error 'a2a-error
+      (signal-a2a-error
              :message "Version not supported"
              :code +a2a-error-version-not-supported+
              :data (json-object "supported" (coerce *supported-protocol-versions* 'vector)
@@ -74,13 +106,13 @@
 
 (defun %find-task (agent task-id)
   (or (gethash task-id (a2a-agent-tasks agent))
-      (error 'a2a-error
+      (signal-a2a-error
              :message (format nil "task ~s not found" task-id)
              :code +a2a-error-task-not-found+)))
 
 (defun %require-task-id (params)
   (or (param params "id")
-      (error 'a2a-error :message "missing task id"
+      (signal-a2a-error :message "missing task id"
                         :code rpc-protocol:+invalid-params+)))
 
 (defun default-echo-handler (agent message task &key)
@@ -114,13 +146,13 @@
          (task (if existing-id
                    (let ((found (%find-task agent existing-id)))
                      (when (terminal-state-p (a2a-task-state found))
-                       (error 'a2a-error
+                       (signal-a2a-error
                               :message "task is in a terminal state"
                               :code +a2a-error-unsupported-operation+))
                      (let ((msg-ctx (a2a-message-context-id message))
                            (task-ctx (a2a-task-context-id found)))
                        (when (and msg-ctx task-ctx (not (equal msg-ctx task-ctx)))
-                         (error 'a2a-error
+                         (signal-a2a-error
                                 :message "contextId does not match task"
                                 :code rpc-protocol:+invalid-params+)))
                      found)
@@ -163,13 +195,13 @@
             ((typep result 'a2a-message)
              result)
             (t
-             (error 'a2a-error
+             (signal-a2a-error
                     :message "handler must return a task or message"
                     :code +a2a-error-invalid-agent-response+)))))))
 
 (defmethod stream-message ((agent a2a-agent) message &key on-event)
   (unless (a2a-agent-streaming-p agent)
-    (error 'a2a-error :message "streaming is not supported"
+    (signal-a2a-error :message "streaming is not supported"
                       :code +a2a-error-unsupported-operation+))
   (let* ((task (%prepare-task agent message)))
     (setf (a2a-task-state task) :working)
@@ -191,7 +223,7 @@
              (mapc on-event ordered))
            (make-a2a-stream-result ordered)))
         (t
-         (error 'a2a-error
+         (signal-a2a-error
                 :message "handler must return a task or message"
                 :code +a2a-error-invalid-agent-response+))))))
 
@@ -250,7 +282,7 @@
 (defmethod cancel-task ((agent a2a-agent) task-id &key)
   (let ((task (%find-task agent task-id)))
     (when (terminal-state-p (a2a-task-state task))
-      (error 'a2a-error
+      (signal-a2a-error
              :message "task is not cancelable"
              :code +a2a-error-task-not-cancelable+))
     (setf (a2a-task-state task) :canceled)
@@ -258,11 +290,11 @@
 
 (defmethod resubscribe-task ((agent a2a-agent) task-id &key on-event)
   (unless (a2a-agent-streaming-p agent)
-    (error 'a2a-error :message "streaming is not supported"
+    (signal-a2a-error :message "streaming is not supported"
                       :code +a2a-error-unsupported-operation+))
   (let ((task (%find-task agent task-id)))
     (when (terminal-state-p (a2a-task-state task))
-      (error 'a2a-error
+      (signal-a2a-error
              :message "cannot subscribe to a terminal task"
              :code +a2a-error-unsupported-operation+))
     (let ((events (list (encode-stream-event :task task))))
@@ -309,7 +341,7 @@
     (ecase op
       (:send-message
        (let* ((raw (or (param params "message")
-                       (error 'a2a-error :message "missing message"
+                       (signal-a2a-error :message "missing message"
                                          :code rpc-protocol:+invalid-params+)))
               (message (decode-message raw))
               (blocking (not (%return-immediately params :default)))
@@ -317,10 +349,10 @@
          (encode-send-result result)))
       (:stream-message
        (unless (a2a-agent-streaming-p agent)
-         (error 'a2a-error :message "streaming is not supported"
+         (signal-a2a-error :message "streaming is not supported"
                            :code +a2a-error-unsupported-operation+))
        (let* ((raw (or (param params "message")
-                       (error 'a2a-error :message "missing message"
+                       (signal-a2a-error :message "missing message"
                                          :code rpc-protocol:+invalid-params+)))
               (message (decode-message raw)))
          (stream-message agent message)))
@@ -346,17 +378,17 @@
       (:subscribe
        (resubscribe-task agent (%require-task-id params)))
       (:push
-       (error 'a2a-error
+       (signal-a2a-error
               :message "push notifications are not supported"
               :code +a2a-error-push-not-supported+))
       (:extended-card
        (unless (%capability-p (a2a-agent-card agent) :extended-agent-card)
-         (error 'a2a-error
+         (signal-a2a-error
                 :message "extended agent card is not supported"
                 :code +a2a-error-unsupported-operation+))
        (let ((card (a2a-agent-extended-card agent)))
          (unless card
-           (error 'a2a-error
+           (signal-a2a-error
                   :message "extended agent card is not configured"
                   :code +a2a-error-extended-card-not-configured+))
          (encode-agent-card card))))))
@@ -375,23 +407,23 @@
 
 (defmethod fetch-agent-card ((backend a2a-backend) url &key)
   (declare (ignore url))
-  (error 'a2a-error :message "fetch-agent-card not implemented"))
+  (signal-a2a-error :message "fetch-agent-card not implemented"))
 
 (defmethod serve-agent-card ((backend a2a-backend) card &key)
   (declare (ignore card))
-  (error 'a2a-error :message "serve-agent-card not implemented"))
+  (signal-a2a-error :message "serve-agent-card not implemented"))
 
 (defmethod send-message ((backend a2a-backend) message &key task-id blocking)
   (declare (ignore message task-id blocking))
-  (error 'a2a-error :message "send-message not implemented"))
+  (signal-a2a-error :message "send-message not implemented"))
 
 (defmethod stream-message ((backend a2a-backend) message &key on-event)
   (declare (ignore message on-event))
-  (error 'a2a-error :message "stream-message not implemented"))
+  (signal-a2a-error :message "stream-message not implemented"))
 
 (defmethod get-task ((backend a2a-backend) task-id &key history-length)
   (declare (ignore task-id history-length))
-  (error 'a2a-error :message "get-task not implemented"))
+  (signal-a2a-error :message "get-task not implemented"))
 
 (defmethod list-tasks ((backend a2a-backend) &key context-id status page-size
                                                page-token history-length
@@ -399,12 +431,12 @@
                                                status-timestamp-after)
   (declare (ignore context-id status page-size page-token history-length
                    include-artifacts status-timestamp-after))
-  (error 'a2a-error :message "list-tasks not implemented"))
+  (signal-a2a-error :message "list-tasks not implemented"))
 
 (defmethod cancel-task ((backend a2a-backend) task-id &key)
   (declare (ignore task-id))
-  (error 'a2a-error :message "cancel-task not implemented"))
+  (signal-a2a-error :message "cancel-task not implemented"))
 
 (defmethod resubscribe-task ((backend a2a-backend) task-id &key on-event)
   (declare (ignore task-id on-event))
-  (error 'a2a-error :message "resubscribe-task not implemented"))
+  (signal-a2a-error :message "resubscribe-task not implemented"))
