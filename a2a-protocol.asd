@@ -4,8 +4,7 @@
   :author "egao1980"
   :license "MIT"
   :depends-on ("rpc-protocol" "json-protocol" "json-backend-jzon")
-  :properties (:cl-repo (:ci (:with ("dissect")
-                             :sources (("json-protocol" :oci)))))
+  :properties (:cl-repo (:ci (:with ("dissect"))))
   :serial t
   :pathname "src"
   :components ((:file "package")
