@@ -17,12 +17,10 @@
     (t default)))
 
 (defun encode-json (obj)
-  (let ((yason:*symbol-encoder* #'yason:encode-symbol-as-lowercase))
-    (with-output-to-string (s)
-      (yason:encode obj s))))
+  (json-protocol:encode obj))
 
 (defun decode-json (string)
-  (yason:parse string :object-as :hash-table :json-arrays-as-vectors t))
+  (json-protocol:decode string))
 
 (defun %as-list (seq)
   (cond
@@ -251,10 +249,10 @@
     ((hash-table-p caps) caps)
     ((listp caps)
      (json-object
-      "streaming" (if (getf caps :streaming) t :false)
-      "pushNotifications" (if (getf caps :push-notifications) t :false)
+      "streaming" (if (getf caps :streaming) t nil)
+      "pushNotifications" (if (getf caps :push-notifications) t nil)
       "extendedAgentCard" (if (getf caps :extended-agent-card) t :omit)))
-    (t (json-object "streaming" t "pushNotifications" :false))))
+    (t (json-object "streaming" t "pushNotifications" nil))))
 
 (defun %decode-capabilities (obj)
   (if (hash-table-p obj)
