@@ -3,7 +3,7 @@
   :description "CLOS Agent2Agent protocol for cl-stack (A2A 1.0)"
   :author "egao1980"
   :license "MIT"
-  :depends-on ("rpc-protocol" "yason")
+  :depends-on ("rpc-protocol" "json-protocol" "json-backend-jzon")
   :properties (:cl-repo (:ci (:with ("dissect"))))
   :serial t
   :pathname "src"
