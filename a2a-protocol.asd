@@ -1,9 +1,10 @@
 (defsystem "a2a-protocol"
-  :version "0.2.0"
+  :version "0.2.1"
   :description "CLOS Agent2Agent protocol for cl-stack (A2A 1.0)"
   :author "egao1980"
   :license "MIT"
-  :depends-on ("rpc-protocol" "json-protocol" "json-backend-jzon")
+  :depends-on ("rpc-protocol" "json-protocol" "json-backend-jzon"
+               "secrets-protocol" "crypto-backend-ironclad")
   :properties (:cl-repo (:ci (:with ("dissect"))))
   :serial t
   :pathname "src"
