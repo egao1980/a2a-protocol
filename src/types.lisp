@@ -27,11 +27,13 @@
   (:documentation "Transport adapter. Concrete backends live in a2a-backend-*."))
 
 (defun make-id (&optional prefix)
-  (format nil "~@[~a-~]~8,'0x~4,'0x~4,'0x"
-          prefix
-          (random #x100000000)
-          (random #x10000)
-          (random #x10000)))
+  "Fresh id: an RFC 9562 UUIDv7 string, after \"PREFIX-\" when PREFIX is given.
+   Its 74 random bits come from the secrets-protocol CSPRNG, so ids are
+   unguessable and do not repeat across images (CL RANDOM did both)."
+  (let ((uuid (secrets-protocol:uuid :version :v7)))
+    (if prefix
+        (concatenate 'string prefix "-" uuid)
+        uuid)))
 
 ;;; --- card -----------------------------------------------------------------
 

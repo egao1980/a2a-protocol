@@ -23,6 +23,25 @@
   (ok (equal -32001 a2a-protocol:+a2a-error-task-not-found+))
   (ok (equal -32009 a2a-protocol:+a2a-error-version-not-supported+)))
 
+(deftest make-id-is-csprng-uuid
+  (testing "prefixed UUIDv7 drawn from secrets-protocol, not CL RANDOM"
+    (let ((id (a2a-protocol:make-id "task")))
+      (ok (= (length id) (+ 5 36)))
+      (ok (string= "task-" id :end2 5))
+      (ok (char= #\7 (char id (+ 5 14))))))
+  (testing "ids do not depend on *random-state*"
+    (let* ((state (make-random-state nil))
+           (a (let ((*random-state* (make-random-state state)))
+                (a2a-protocol:make-id)))
+           (b (let ((*random-state* (make-random-state state)))
+               (a2a-protocol:make-id))))
+      (ok (= 36 (length a)))
+      (ng (string= a b))))
+  (testing "1000 ids are distinct"
+    (let ((seen (make-hash-table :test #'equal)))
+      (dotimes (i 1000) (setf (gethash (a2a-protocol:make-id) seen) t))
+      (ok (= 1000 (hash-table-count seen))))))
+
 (deftest-parametrize task-state-roundtrip
     ((lisp wire)
      (:submitted "TASK_STATE_SUBMITTED")
